@@ -1,4 +1,5 @@
 ﻿using AudioSwitcher.Properties;
+using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -60,11 +61,11 @@ namespace AudioSwitcher
                 var prefedDevice = devices.Find(o => o.Item2.Equals(Properties.Settings.Default.PreferredDevice));
                 if (prefedDevice != null)
                 {
+                    // TODO Get current selected device so we don't change to a device already in use causing a every minor blip in audio.
                     SelectDevice(prefedDevice.Item1);
                     Console.WriteLine("Auto Selected {0}", prefedDevice.Item2);
                     if (autorun && QuitOnCompleteFlag)
                     {
-                        Console.WriteLine("QUIT NOW...");
                         trayIcon.Dispose();
                         System.Environment.Exit(0);
                     }
@@ -142,12 +143,12 @@ namespace AudioSwitcher
             trayMenu.MenuItems.Add(AutoRunSetting);
 
             // ChangeOnRun - ChangeOnRunFlag
-            var ChangeOnRunMI = new MenuItem { Text = "Change to pref on run", Checked = ChangeOnRunFlag };
+            var ChangeOnRunMI = new MenuItem { Text = "Change to Pref Device on Run", Checked = ChangeOnRunFlag };
             ChangeOnRunMI.Click += ChangeOnRunAction;
             trayMenu.MenuItems.Add(ChangeOnRunMI);
 
             // Quit On Change
-            QuitOnComplete = new MenuItem { Text = "Quit On Complete", Checked = QuitOnCompleteFlag };
+            QuitOnComplete = new MenuItem { Text = "Quit On Autorun Complete", Checked = QuitOnCompleteFlag };
             QuitOnComplete.Click += QuitOncompleteAction;
             trayMenu.MenuItems.Add(QuitOnComplete);
 
@@ -169,7 +170,12 @@ namespace AudioSwitcher
 
         private void SetRunOnStartUp(bool runOnStartUPFlag)
         {
-            Console.WriteLine("SetRunOnStartUp: {0}", runOnStartUPFlag);
+            RegistryKey rk = Registry.CurrentUser.OpenSubKey ("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", true);
+
+            if (runOnStartUPFlag)
+                rk.SetValue("AudioSwitcher", "\""+Application.ExecutablePath.ToString() + "\" autorun");
+            else
+                rk.DeleteValue("AudioSwitcher", false);
         }
 
         private void ChangeOnRunAction(object sender, EventArgs e)
