@@ -12,21 +12,9 @@ namespace AudioSwitcher
 {
     public class SysTrayApp : Form
     {
-        [STAThread]
-        public static void Main(string[] args)
-        {
-            foreach (var arg in args)
-            {
-                if (arg.ToLower().Equals("autorun"))
-                {
-                    autorun = true;
-                }
-            }
-
-            Application.Run(new SysTrayApp());
-        }
 
         private static bool autorun = false;
+        private static bool debug = false;
         private NotifyIcon trayIcon;
         private ContextMenu trayMenu;
         private int deviceCount;
@@ -37,7 +25,21 @@ namespace AudioSwitcher
         private bool ChangeOnRunFlag = false;
         private bool RunOnStartUPFlag = false;
 
-        private static List<Tuple<int, string, bool>> devices = new List<Tuple<int, string, bool>>();
+        [STAThread]
+        public static void Main(string[] args)
+        {
+            foreach (var arg in args)
+            {
+                if (arg.ToLower().Equals("autorun"))
+                    autorun = true;
+                if (arg.ToLower().Equals("debug"))
+                    debug = true;
+            }
+
+            Application.Run(new SysTrayApp());
+        }
+
+        private static List<Tuple<int, string, bool, string>> devices = new List<Tuple<int, string, bool, string>>();
 
         public SysTrayApp()
         {
@@ -58,7 +60,8 @@ namespace AudioSwitcher
 
             if (ChangeOnRunFlag && !String.IsNullOrEmpty(Properties.Settings.Default.PreferredDevice))
             {
-                var prefedDevice = devices.Find(o => o.Item2.Equals(Properties.Settings.Default.PreferredDevice));
+                Console.WriteLine("ID: {0}",Properties.Settings.Default.PreferredDevice);
+                var prefedDevice = devices.Find(o => o.Item4.Equals(Properties.Settings.Default.PreferredDevice));
                 if (prefedDevice != null)
                 {
                     // TODO Get current selected device so we don't change to a device already in use causing a every minor blip in audio.
@@ -152,11 +155,25 @@ namespace AudioSwitcher
             QuitOnComplete.Click += QuitOncompleteAction;
             trayMenu.MenuItems.Add(QuitOnComplete);
 
+            if (debug)
+            {
+                trayMenu.MenuItems.Add("-"); // Add a Spacer
+                MenuItem debugMenuItem = new MenuItem { Text = "Debug" };
+                debugMenuItem.Click += debugMenuClick;
+                trayMenu.MenuItems.Add(debugMenuItem);
+            }
+
             trayMenu.MenuItems.Add("-"); // Add a Spacer
 
             var exitItem = new MenuItem { Text = "Exit" };
             exitItem.Click += OnExit;
             trayMenu.MenuItems.Add(exitItem);
+        }
+
+        private void debugMenuClick(object sender, EventArgs e)
+        {
+            if (!debug)
+                return;
         }
 
         private void AutoRunSettingAction(object sender, EventArgs e)
@@ -197,9 +214,9 @@ namespace AudioSwitcher
 
         #region EndPointController.exe interaction
 
-        private static List<Tuple<int, string, bool>> GetDevices()
+        private static List<Tuple<int, string, bool, string>> GetDevices()
         {
-            List<Tuple<int, string, bool>> deviceList = new List<Tuple<int, string, bool>>();
+            List<Tuple<int, string, bool, string>> deviceList = new List<Tuple<int, string, bool, string>>();
             var p = new Process
                         {
                             StartInfo =
@@ -208,17 +225,16 @@ namespace AudioSwitcher
                                     RedirectStandardOutput = true,
                                     CreateNoWindow = true,
                                     FileName = "EndPointController.exe",
-                                    Arguments = "-f \"%d|%ws|%d|%d\""
+                                    Arguments = "-f \"%d|%ws|%d|%d|%ws|%ws|%ws\""
                                 }
                         };
             p.Start();
             p.WaitForExit();
             var stdout = p.StandardOutput.ReadToEnd().Trim();
-            
             foreach (var line in stdout.Split('\n'))
             {
                 var elems = line.Trim().Split('|');
-                var deviceInfo = new Tuple<int, string, bool>(int.Parse(elems[0]), elems[1], elems[3].Equals("1"));
+                var deviceInfo = new Tuple<int, string, bool, string>(int.Parse(elems[0]), elems[1], elems[3].Equals("1"), elems[6]);
                 deviceList.Add(deviceInfo);
             }
 
@@ -237,7 +253,7 @@ namespace AudioSwitcher
             else
             {
                 // Found the selected device, Save it as a pref and pass it on to EndPointController.
-                Properties.Settings.Default.PreferredDevice = selectedDevice.Item2;
+                Properties.Settings.Default.PreferredDevice = selectedDevice.Item4;
                 Properties.Settings.Default.Save();
                 var p = new Process
                 {
